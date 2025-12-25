@@ -53,11 +53,18 @@ def main():
         # 这里 custom_field 可以通过更复杂的逻辑传入，例如从文件名解析或配置中读取
         output_path = config.get_output_path(file_path, custom_field=config.config.get('output_suffix', ''))
         
+        config_dict = config.config
+        global_opts = config_dict.get("global_options", [])
+        input_opts = config_dict.get("input_options", [])
+        output_opts = config_dict.get("output_options", [])
+
         # 执行转换
         success = processor.run_conversion(
-            file_path, 
-            output_path, 
-            ffmpeg_args=config.config.get("ffmpeg_params")
+            file_path,
+            output_path,
+            global_opts=global_opts,
+            input_opts=input_opts,
+            output_opts=output_opts
         )
         
         if not success:
