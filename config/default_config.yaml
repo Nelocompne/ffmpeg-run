@@ -1,0 +1,25 @@
+# FFmpeg 编码参数列表
+ffmpeg_params: 
+  - "-c:v"
+  - "libx264"
+  - "-crf"
+  - "23"
+  - "-preset"
+  - "medium"
+  - "-c:a"
+  - "aac"
+  - "-b:a"
+  - "192k"
+
+# 输出格式后缀
+output_format: "mp4"
+
+# 输出目录 (相对于运行目录)
+output_dir: "./output"
+
+# 自定义后缀 (用于文件名)
+output_suffix: "_HQ"
+
+# 文件名模板 (可选，如果不设置则使用默认逻辑)
+# 支持变量: $name (原名), $custom (自定义字段), $ext (格式)
+output_template: "$name$custom.$ext"
