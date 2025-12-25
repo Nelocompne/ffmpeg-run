@@ -1,5 +1,6 @@
 import yaml
 import os
+from pathlib import Path
 from string import Template
 
 class ConfigManager:
@@ -26,30 +27,33 @@ class ConfigManager:
         根据配置中的模板生成输出文件名。
         支持：[原文件名]_[自定义字段].[格式]
         """
-        input_path = os.path.normpath(input_path)
         base_name = os.path.splitext(os.path.basename(input_path))[0]
         output_format = self.config['output_format']
         
-        # 简单的模板替换逻辑
-        # 用户可以在配置中写 "[name]_[custom].ext" 或直接在这里硬编码规则
         raw_template = self.config.get('output_template', "$name$custom.$ext")
-        
-        # 使用Python的Template进行安全替换
         template = Template(raw_template)
         output_name = template.substitute(
             name=base_name,
             custom=f"{custom_field}" if custom_field else "",
             ext=output_format
         )
-        
         return output_name
 
     def get_output_path(self, input_path, custom_field=""):
-        """构建完整的输出路径"""
+        """
+        构建完整的输出路径，支持绝对路径和相对路径。
+        """
         filename = self.build_output_filename(input_path, custom_field)
         output_dir = self.config['output_dir']
-        
-        # 确保输出目录存在
-        os.makedirs(output_dir, exist_ok=True)
-        
-        return os.path.join(output_dir, filename)
+
+        # 使用 pathlib 处理路径（推荐方式）
+        output_path = Path(output_dir)
+
+        # 如果是相对路径，则基于当前工作目录解析
+        if not output_path.is_absolute():
+            output_path = Path.cwd() / output_path
+
+        # 创建输出目录（包括父级）
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        return str(output_path / filename)

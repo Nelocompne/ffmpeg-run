@@ -15,7 +15,7 @@ ffmpeg_params:
 output_format: "mp4"
 
 # 输出目录 (相对于运行目录)
-output_dir: "./output"
+output_dir: "C:\\output"
 
 # 自定义后缀 (用于文件名)
 output_suffix: "_HQ"
