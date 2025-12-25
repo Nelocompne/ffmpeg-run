@@ -102,19 +102,31 @@ class FFmpegProcessor:
 
     def stop_current_task(self):
         with self._lock:
-            if self.current_proc and self.current_proc.poll() is None:
+            if self.current_psutil_proc and self.current_psutil_proc.is_running():
                 try:
-                    self.current_proc.terminate()
-                    self.current_proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    self.current_proc.kill()
-                self.current_proc = None
-                self.current_psutil_proc = None
-                self._stop_event.set()
-                self._suspended = False
-                print("\n⏹️  FFmpeg 任务已中止。")
-                return True
-        return False
+                    # 先尝试优雅终止
+                    self.current_psutil_proc.terminate()
+                    gone, alive = psutil.wait_procs([self.current_psutil_proc], timeout=3)
+                    for p in alive:
+                        # 强制杀死（包括子进程）
+                        for child in p.children(recursive=True):
+                            try:
+                                child.kill()
+                            except psutil.NoSuchProcess:
+                                pass
+                        try:
+                            p.kill()
+                        except psutil.NoSuchProcess:
+                            pass
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+    
+            self.current_proc = None
+            self.current_psutil_proc = None
+            self._stop_event.set()
+            self._suspended = False
+            print("\n⏹️  FFmpeg 任务已强制终止。")
+            return True
 
     def _stdout_reader(self, pipe):
         """独立线程读取 stdout 并解析进度"""

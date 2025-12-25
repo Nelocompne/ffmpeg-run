@@ -3,17 +3,17 @@ import os
 import sys
 import threading
 import time
+import atexit          # 新增
 from modules.config_handler import ConfigManager
 from modules.file_scanner import FileScanner
 from modules.ffmpeg_processor import FFmpegProcessor
 from modules.path_utils import normalize_path
 
-# 全局控制变量
+# 全局变量
 processor = None
 should_exit = False
 
 def keyboard_listener():
-    """监听用户按键：p=暂停, r=恢复, q=退出"""
     global should_exit, processor
     print("\n⌨️  控制提示: 按 'p' 暂停, 'r' 恢复, 'q' 退出当前任务\n")
     while not should_exit:
@@ -31,18 +31,22 @@ def keyboard_listener():
                 should_exit = True
                 break
         except EOFError:
-            # 非交互式环境（如重定向）下不报错
             time.sleep(1)
+
+def cleanup_on_exit():
+    """程序退出时确保 FFmpeg 被杀死"""
+    global processor
+    if processor:
+        processor.stop_current_task()
 
 def main():
     global processor, should_exit
 
-    parser = argparse.ArgumentParser(description="跨平台FFmpeg批量处理工具（支持暂停/恢复）")
+    parser = argparse.ArgumentParser(description="FFmpeg 批量转换工具（支持暂停/恢复/安全退出）")
     parser.add_argument("input", help="输入文件或目录路径")
     parser.add_argument("--config", "-c", help="指定YAML配置文件路径", default=None)
     args = parser.parse_args()
 
-    # 确定配置路径
     config_path = args.config
     if not config_path and args.input:
         potential_config = os.path.join(args.input, "config.yaml")
@@ -55,6 +59,9 @@ def main():
     scanner = FileScanner()
     processor = FFmpegProcessor()
 
+    # 注册退出清理钩子（兜底）
+    atexit.register(cleanup_on_exit)
+
     input_source = normalize_path(args.input)
     file_list = scanner.scan(input_source)
     if not file_list:
@@ -63,38 +70,43 @@ def main():
 
     print(f"找到 {len(file_list)} 个文件，开始处理...")
 
-    # 启动键盘监听线程（仅在终端交互时有效）
     listener_thread = threading.Thread(target=keyboard_listener, daemon=True)
     listener_thread.start()
 
-    for file_path in file_list:
-        if should_exit:
-            print("用户请求退出，停止后续任务。")
-            break
+    try:
+        for file_path in file_list:
+            if should_exit:
+                print("用户请求退出，停止后续任务。")
+                break
 
-        output_path = config.get_output_path(file_path, custom_field=config.config.get('output_suffix', ''))
+            output_path = config.get_output_path(file_path, custom_field=config.config.get('output_suffix', ''))
 
-        config_dict = config.config
-        global_opts = config_dict.get("global_options", [])
-        input_opts = config_dict.get("input_options", [])
-        output_opts = config_dict.get("output_options", [])
+            config_dict = config.config
+            global_opts = config_dict.get("global_options", [])
+            input_opts = config_dict.get("input_options", [])
+            output_opts = config_dict.get("output_options", [])
 
-        # 兼容旧版配置
-        if "ffmpeg_params" in config_dict and not output_opts:
-            output_opts = config_dict["ffmpeg_params"]
+            if "ffmpeg_params" in config_dict and not output_opts:
+                output_opts = config_dict["ffmpeg_params"]
 
-        success = processor.run_conversion(
-            file_path,
-            output_path,
-            global_opts=global_opts,
-            input_opts=input_opts,
-            output_opts=output_opts
-        )
+            success = processor.run_conversion(
+                file_path,
+                output_path,
+                global_opts=global_opts,
+                input_opts=input_opts,
+                output_opts=output_opts
+            )
 
-        if not success and should_exit:
-            break
+            if not success and should_exit:
+                break
 
-    print("所有任务完成。")
+        print("所有任务完成。")
+
+    except KeyboardInterrupt:
+        print("\n\n🛑 检测到 Ctrl+C，正在终止 FFmpeg 任务...")
+        if processor:
+            processor.stop_current_task()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
