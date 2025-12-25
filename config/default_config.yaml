@@ -14,19 +14,19 @@ input_options:
 # 输出选项（作用于输出文件前的编码参数）
 output_options:
   - "-c:v"
-  - "libx264"
-  - "-crf"
+  - "hevc_nvenc"
+  - "-rc"
+  - "vbr"
+  - "-cq"
   - "23"
-  - "-preset"
-  - "fast"
   - "-c:a"
   - "aac"
 
 # 输出格式后缀
 output_format: "mp4"
-output_dir: "./output"
+output_dir: "./dist/output"
 # 自定义后缀 (用于文件名)
-output_suffix: "_HQ"
+output_suffix: "_test"
 # 文件名模板 (可选，如果不设置则使用默认逻辑)
 # 支持变量: $name (原名), $custom (自定义字段), $ext (格式)
 output_template: "$name$custom.$ext"

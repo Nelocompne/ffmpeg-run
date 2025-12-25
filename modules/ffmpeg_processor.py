@@ -3,11 +3,20 @@ import os
 import sys
 import re
 import time
+import signal
+import threading
+import psutil
 from pathlib import Path
 
 class FFmpegProcessor:
     def __init__(self, ffmpeg_path="ffmpeg"):
         self.ffmpeg_path = ffmpeg_path
+        self.current_proc = None          # subprocess.Popen 对象
+        self.current_psutil_proc = None   # psutil.Process 对象（FFmpeg 主进程）
+        self._lock = threading.Lock()
+        self._progress_info = {"current_time": "00:00:00.000", "total_duration": None}
+        self._stop_event = threading.Event()
+        self._suspended = False
 
     def _parse_time(self, time_str):
         try:
@@ -18,10 +27,9 @@ class FFmpegProcessor:
             return 0.0
 
     def _get_duration(self, input_file):
-        """使用 ffprobe 获取总时长"""
         ffprobe_path = str(Path(self.ffmpeg_path).parent / "ffprobe")
         if not Path(ffprobe_path).exists():
-            ffprobe_path = "ffprobe"  # fallback to PATH
+            ffprobe_path = "ffprobe"
 
         cmd = [
             ffprobe_path,
@@ -38,75 +46,160 @@ class FFmpegProcessor:
             pass
         return None
 
+    def _suspend_process_tree(self, proc):
+        """递归挂起进程及其所有子进程（Windows 更有效）"""
+        try:
+            children = proc.children(recursive=True)
+            for child in reversed(children):  # 先挂起子进程
+                if child.is_running():
+                    if sys.platform == "win32":
+                        child.suspend()
+                    else:
+                        child.send_signal(signal.SIGSTOP)
+            if proc.is_running():
+                if sys.platform == "win32":
+                    proc.suspend()
+                else:
+                    proc.send_signal(signal.SIGSTOP)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    def _resume_process_tree(self, proc):
+        """递归恢复进程树"""
+        try:
+            if proc.is_running():
+                if sys.platform == "win32":
+                    proc.resume()
+                else:
+                    proc.send_signal(signal.SIGCONT)
+            children = proc.children(recursive=True)
+            for child in children:  # 后恢复子进程
+                if child.is_running():
+                    if sys.platform == "win32":
+                        child.resume()
+                    else:
+                        child.send_signal(signal.SIGCONT)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    def pause_current_task(self):
+        with self._lock:
+            if self.current_psutil_proc and not self._suspended:
+                self._suspend_process_tree(self.current_psutil_proc)
+                self._suspended = True
+                print("\n⏸️  FFmpeg 任务已暂停。按 'r' 恢复，'q' 退出。")
+                return True
+        return False
+
+    def resume_current_task(self):
+        with self._lock:
+            if self.current_psutil_proc and self._suspended:
+                self._resume_process_tree(self.current_psutil_proc)
+                self._suspended = False
+                print("\n▶️  FFmpeg 任务已恢复。")
+                return True
+        return False
+
+    def stop_current_task(self):
+        with self._lock:
+            if self.current_proc and self.current_proc.poll() is None:
+                try:
+                    self.current_proc.terminate()
+                    self.current_proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.current_proc.kill()
+                self.current_proc = None
+                self.current_psutil_proc = None
+                self._stop_event.set()
+                self._suspended = False
+                print("\n⏹️  FFmpeg 任务已中止。")
+                return True
+        return False
+
+    def _stdout_reader(self, pipe):
+        """独立线程读取 stdout 并解析进度"""
+        while not self._stop_event.is_set():
+            line = pipe.readline()
+            if not line:
+                break
+            match = re.search(r"time=(\d+:\d+:\d+\.\d+)", line)
+            if match:
+                with self._lock:
+                    self._progress_info["current_time"] = match.group(1)
+
     def run_conversion(self, input_file, output_file, global_opts=None, input_opts=None, output_opts=None):
-        """
-        正确构建 FFmpeg 命令：
-        ffmpeg [global_options] [input_options] -i input [output_options] output
-        """
-        # 默认全局选项（必须包含 -hide_banner -nostdin）
-        cmd = [self.ffmpeg_path]
-
-        # 添加固定全局选项
-        cmd += ["-hide_banner", "-nostdin"]
-
-        # 添加用户自定义全局选项
+        cmd = [self.ffmpeg_path, "-hide_banner", "-nostdin"]
         if global_opts:
             cmd.extend(global_opts)
-
-        # 添加输入选项
         if input_opts:
             cmd.extend(input_opts)
-
-        # 添加输入文件
         cmd += ["-i", input_file]
-
-        # 添加输出选项
         if output_opts:
             cmd.extend(output_opts)
-
-        # 添加输出文件
         cmd.append(output_file)
 
         print(f"执行命令: {' '.join(cmd)}")
 
         total_duration = self._get_duration(input_file)
+        with self._lock:
+            self._progress_info["total_duration"] = total_duration
 
         try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                encoding='utf-8',
-                errors='replace'
+            self._stop_event.clear()
+            self._suspended = False
+
+            with self._lock:
+                self.current_proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    bufsize=1  # 行缓冲
+                )
+                self.current_psutil_proc = psutil.Process(self.current_proc.pid)
+
+            # 启动 stdout 读取线程（非阻塞）
+            reader_thread = threading.Thread(
+                target=self._stdout_reader,
+                args=(self.current_proc.stdout,),
+                daemon=True
             )
+            reader_thread.start()
 
+            # 主循环：显示进度（每 0.5 秒）
             last_update = 0
+            while self.current_proc.poll() is None:
+                now = time.time()
+                if now - last_update > 0.5:
+                    with self._lock:
+                        current_time_str = self._progress_info["current_time"]
+                        total = self._progress_info["total_duration"]
 
-            while True:
-                line = process.stdout.readline()
-                if not line and process.poll() is not None:
-                    break
+                    if total and total > 0:
+                        current_sec = self._parse_time(current_time_str)
+                        progress = min(100.0, (current_sec / total) * 100)
+                        bar_length = 30
+                        filled = int(bar_length * progress // 100)
+                        bar = '█' * filled + '-' * (bar_length - filled)
+                        print(f"\r进度: |{bar}| {progress:.1f}% ({current_time_str})", end='', flush=True)
+                    else:
+                        print(f"\r处理中: {current_time_str}", end='', flush=True)
+                    last_update = now
 
-                if line:
-                    match = re.search(r"time=(\d+:\d+:\d+\.\d+)", line)
-                    if match:
-                        current_time = self._parse_time(match.group(1))
-                        now = time.time()
-                        if now - last_update > 0.5:
-                            if total_duration and total_duration > 0:
-                                progress = min(100.0, (current_time / total_duration) * 100)
-                                bar_length = 30
-                                filled = int(bar_length * progress // 100)
-                                bar = '█' * filled + '-' * (bar_length - filled)
-                                print(f"\r进度: |{bar}| {progress:.1f}% ({match.group(1)})", end='', flush=True)
-                            else:
-                                print(f"\r处理中: {match.group(1)}", end='', flush=True)
-                            last_update = now
+                time.sleep(0.1)  # 避免忙等待
 
-            process.wait()
+            # 等待读取线程结束
+            reader_thread.join(timeout=1)
 
-            if process.returncode == 0:
+            success = self.current_proc.returncode == 0
+
+            with self._lock:
+                self.current_proc = None
+                self.current_psutil_proc = None
+
+            if success:
                 print(f"\n✅ 成功: {Path(input_file).name} -> {Path(output_file).name}")
                 return True
             else:
