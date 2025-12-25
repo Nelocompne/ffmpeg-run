@@ -38,7 +38,7 @@ class ConfigManager:
         template = Template(raw_template)
         output_name = template.substitute(
             name=base_name,
-            custom=f"_{custom_field}" if custom_field else "",
+            custom=f"{custom_field}" if custom_field else "",
             ext=output_format
         )
         
