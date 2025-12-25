@@ -6,6 +6,7 @@ import time
 import signal
 import threading
 import psutil
+import shlex
 from pathlib import Path
 
 class FFmpegProcessor:
@@ -149,8 +150,10 @@ class FFmpegProcessor:
         if output_opts:
             cmd.extend(output_opts)
         cmd.append(output_file)
-
-        print(f"执行命令: {' '.join(cmd)}")
+    
+        # 安全打印：每个参数都 shell-quoted
+        safe_cmd = ' '.join(shlex.quote(str(arg)) for arg in cmd)
+        print(f"执行命令: {safe_cmd}")
 
         total_duration = self._get_duration(input_file)
         with self._lock:
