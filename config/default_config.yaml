@@ -1,15 +1,13 @@
 # 全局选项（作用于整个 ffmpeg 进程）
 global_options:
   - "-y"                     # 覆盖输出文件
+  - "-hwaccel"
+  - "auto"
   # - "-loglevel"
-  # - "error"                  # 只显示错误（使用error则进度展示功能失效）
+  # - "error"                # 只显示错误（使用error则进度展示功能失效）
 
 # 输入选项（作用于 -i 之前的参数）
-input_options:
-  - "-ss"
-  - "00:00:10"               # 从第10秒开始（示例）
-  # - "-t"
-  # - "30"                   # 截取30秒
+input_options: []            # 留空
 
 # 输出选项（作用于输出文件前的编码参数）
 output_options:
@@ -21,9 +19,11 @@ output_options:
   - "23"
   - "-c:a"
   - "aac"
+  - "-movflags"
+  - "+use_metadata_tags"
 
 # 输出格式后缀
-output_format: "mp4"
+output_format: "mkv"
 output_dir: "./dist/output"
 # 自定义后缀 (用于文件名)
 output_suffix: "_test"
