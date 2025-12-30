@@ -16,7 +16,7 @@ python main.py /home/user/videos/ # Linux 下运行
 - [x] 自定义输出文件命名
 - [x] 支持控制暂停/恢复任务进度
 - [x] 任务处理进度
-- [ ] 对媒体文件的智能处理
+- [x] ~~对媒体文件的智能处理~~ ffmpeg原生的过滤参数等支持
 
 ## 灵感来源
 - [FFmpegFreeUI](https://github.com/Lake1059/FFmpegFreeUI)
