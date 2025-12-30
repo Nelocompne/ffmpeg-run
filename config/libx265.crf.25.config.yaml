@@ -1,0 +1,21 @@
+global_options:
+  - "-y"
+
+input_options: []
+
+output_options:
+  - "-c:v"
+  - "libx265"
+  - "-preset"
+  - "medium"
+  - "-crf"
+  - "25"
+  - "-vf"
+  - "scale=540:-2" #宽540 高等比例缩放
+  - "-movflags"
+  - "+use_metadata_tags"
+
+output_format: "mkv"
+output_dir: "./"
+output_suffix: "_libx265.crf.25"
+output_template: "$name$custom.$ext"

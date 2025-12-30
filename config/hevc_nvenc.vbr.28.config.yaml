@@ -1,0 +1,23 @@
+global_options:
+  - "-y"
+  - "-hwaccel"
+  - "auto"
+
+input_options: []
+
+output_options:
+  - "-c:v"
+  - "hevc_nvenc"
+  - "-preset"
+  - "p7"
+  - "-rc"
+  - "vbr"
+  - "-cq"
+  - "28"
+  - "-movflags"
+  - "+use_metadata_tags"
+
+output_format: "mkv"
+output_dir: "./"
+output_suffix: "_hevc_nvenc.vbr.28"
+output_template: "$name$custom.$ext"
