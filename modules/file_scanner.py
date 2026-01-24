@@ -3,7 +3,7 @@ from pathlib import Path
 
 # 常见的音视频文件扩展名
 SUPPORTED_EXTENSIONS = {'.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', 
-                        '.mp3', '.wav', '.flac', '.aac', '.m4a'}
+                        '.mp3', '.wav', '.flac', '.aac', '.m4a', '.ts'}
 
 class FileScanner:
     @staticmethod
