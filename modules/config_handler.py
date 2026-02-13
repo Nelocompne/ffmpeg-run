@@ -9,7 +9,12 @@ class ConfigManager:
             "ffmpeg_params": ["-c:v", "libx264", "-crf", "23", "-preset", "fast", "-c:a", "aac"],
             "output_suffix": "_converted",
             "output_format": "mp4",
-            "output_dir": "./output"
+            "output_dir": "./output",
+            "mode": "convert",  # convert 或 keyframe
+            "keyframe_options": {
+                "threshold": 0.3,
+                "min_interval": 0.5
+            }
         }
         self.config = self.load_config(config_path) if config_path else self.default_config
 
@@ -57,3 +62,14 @@ class ConfigManager:
         output_path.mkdir(parents=True, exist_ok=True)
 
         return str(output_path / filename)
+    
+    def get_mode(self):
+        """获取处理模式: convert 或 keyframe"""
+        return self.config.get('mode', 'convert')
+    
+    def get_keyframe_options(self):
+        """获取关键帧提取选项"""
+        return self.config.get('keyframe_options', {
+            'threshold': 0.3,
+            'min_interval': 0.5
+        })
