@@ -1,0 +1,42 @@
+# 关键帧提取 + 转换 组合配置（CPU编码版本）
+# 适用于没有NVIDIA显卡的系统
+
+# 处理模式：both（关键帧提取 + FFmpeg 转换）
+mode: "both"
+
+# 关键帧提取选项
+keyframe_options:
+  threshold: 0.2           # 帧差异阈值
+  min_interval: 5.0        # 最小关键帧间隔（秒）
+
+# FFmpeg 全局选项
+global_options:
+  - "-y"                     # 覆盖输出文件
+
+# FFmpeg 输入选项
+input_options: []
+
+# FFmpeg 输出选项（使用 CPU 的 libx265 编码）
+output_options:
+  - "-c:v"
+  - "libx265"                # CPU HEVC 编码
+  - "-crf"
+  - "25"                     # 质量 (0-51, 推荐18-28)
+  - "-preset"
+  - "medium"                 # 预设 (ultrafast-veryslow)
+  - "-c:a"
+  - "aac"                    # 音频编码
+  - "-b:a"
+  - "128k"                   # 音频比特率
+  - "-movflags"
+  - "+faststart"
+
+# 输出设置
+output_format: "mkv"
+output_dir: "./dist/keyframe_converted"
+output_suffix: "_kf_cpu"
+output_template: "$name$custom.$ext"
+
+# 说明：
+# 使用 CPU 编码器 libx265，兼容性好但速度较慢
+# 如果有 NVIDIA GPU，建议使用 keyframe_and_convert.config.yaml
