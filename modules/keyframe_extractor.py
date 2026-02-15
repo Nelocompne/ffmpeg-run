@@ -186,6 +186,8 @@ class KeyFrameExtractor:
             '-map', '0:v:0',       # 从第一个输入映射视频
             '-map', '1:a:0?',      # 从第二个输入映射音频（如果存在）
             '-shortest',           # 以较短的流为准
+            '-movflags', '+use_metadata_tags',
+
             output_path
         ]
         
