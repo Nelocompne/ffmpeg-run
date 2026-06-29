@@ -10,11 +10,7 @@ class ConfigManager:
             "output_suffix": "_converted",
             "output_format": "mp4",
             "output_dir": "./output",
-            "mode": "convert",  # convert, keyframe, 或 both
-            "keyframe_options": {
-                "threshold": 0.3,
-                "min_interval": 0.5
-            }
+            "mode": "convert"
         }
         self.config = self.load_config(config_path) if config_path else self.default_config
 
@@ -64,22 +60,5 @@ class ConfigManager:
         return str(output_path / filename)
     
     def get_mode(self):
-        """获取处理模式: convert, keyframe, 或 both"""
+        """获取处理模式"""
         return self.config.get('mode', 'convert')
-    
-    def get_keyframe_options(self):
-        """获取关键帧提取选项"""
-        return self.config.get('keyframe_options', {
-            'threshold': 0.3,
-            'min_interval': 0.5
-        })
-    
-    def is_keyframe_enabled(self):
-        """是否启用关键帧提取"""
-        mode = self.get_mode()
-        return mode in ['keyframe', 'both']
-    
-    def is_convert_enabled(self):
-        """是否启用转换"""
-        mode = self.get_mode()
-        return mode in ['convert', 'both']
